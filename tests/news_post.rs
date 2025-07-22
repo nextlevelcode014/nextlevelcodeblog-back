@@ -9,9 +9,8 @@ use backend_nextlevelcodeblog::{
 use sqlx::PgPool;
 
 use crate::common::{
-    constants::{TEST_EMAIL, TEST_NAME, TEST_PASSWORD, TEST_VERIFICATION_TOKEN},
     fixtures::create_user_test,
-    test_state::{generate_test_token, test_server},
+    test_state::{generate_test_token, test_server, ConfigTest},
 };
 
 mod common;
@@ -19,18 +18,19 @@ mod common;
 #[sqlx::test(migrations = "./migrations")]
 async fn news_post_test(pg_pool: PgPool) {
     init_logger();
+    let config_test = ConfigTest::init();
     let user = create_user_test(
         &pg_pool,
         &CreateUser {
             auth_provider: AuthProvider::Credentials,
-            email: TEST_EMAIL.to_string(),
+            email: config_test.test_email,
             email_verified: true,
             google_sub: None,
-            name: TEST_NAME.to_string(),
-            password_hash: Some(TEST_PASSWORD.to_string()),
+            name: config_test.test_name,
+            password_hash: Some(config_test.test_password),
             picture: None,
             token_expires_at: None,
-            verification_token: Some(TEST_VERIFICATION_TOKEN.to_string()),
+            verification_token: Some(config_test.test_verification_token),
         },
         UserRole::User,
     )

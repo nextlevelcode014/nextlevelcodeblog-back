@@ -10,9 +10,8 @@ use serde_json::json;
 use sqlx::PgPool;
 
 use crate::common::{
-    constants::{TEST_EMAIL, TEST_EMAIL_ADMIN, TEST_NAME, TEST_PASSWORD, TEST_VERIFICATION_TOKEN},
     fixtures::create_user_test,
-    test_state::{generate_test_token, test_server},
+    test_state::{generate_test_token, test_server, ConfigTest},
 };
 
 mod common;
@@ -20,18 +19,20 @@ mod common;
 #[sqlx::test(migrations = "./migrations")]
 async fn private_test(pg_pool: PgPool) {
     init_logger();
+    let config_test = ConfigTest::init();
+
     let user = create_user_test(
         &pg_pool,
         &CreateUser {
             auth_provider: AuthProvider::Credentials,
-            email: TEST_EMAIL.to_string(),
+            email: config_test.test_email,
             email_verified: true,
             google_sub: None,
-            name: TEST_NAME.to_string(),
-            password_hash: Some(TEST_PASSWORD.to_string()),
+            name: config_test.test_name.to_owned(),
+            password_hash: Some(config_test.test_password.to_owned()),
             picture: None,
             token_expires_at: None,
-            verification_token: Some(TEST_VERIFICATION_TOKEN.to_string()),
+            verification_token: Some(config_test.test_password.to_owned()),
         },
         UserRole::User,
     )
@@ -42,14 +43,14 @@ async fn private_test(pg_pool: PgPool) {
         &pg_pool,
         &CreateUser {
             auth_provider: AuthProvider::Credentials,
-            email: TEST_EMAIL_ADMIN.to_string(),
+            email: config_test.test_email_admin,
             email_verified: true,
             google_sub: None,
-            name: TEST_NAME.to_string(),
-            password_hash: Some(TEST_PASSWORD.to_string()),
+            name: config_test.test_name,
+            password_hash: Some(config_test.test_password),
             picture: None,
             token_expires_at: None,
-            verification_token: Some("kksksksksk".to_string()),
+            verification_token: Some(config_test.test_verification_token),
         },
         UserRole::Admin,
     )
