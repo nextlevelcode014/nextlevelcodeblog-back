@@ -23,6 +23,11 @@ jobs:
           SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}
           RECAPTCHA_SECRET_KEY=${{ secrets.RECAPTCHA_SECRET_KEY }}
           GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
+          TEST_EMAIL=${{ secrets.TEST_EMAIL }}
+          TEST_NAME=${{ secrets.TEST_NAME }}
+          TEST_PASSWORD=${{ secrets.TEST_PASSWORD }}
+          TEST_EMAIL_ADMIN=${{ secrets.TEST_EMAIL_ADMIN }}
+          TEST_VERIFICATION_TOKEN=${{ secrets.TEST_VERIFICATION_TOKEN }}
           EOF
 
       - name: Set up Docker Buildx

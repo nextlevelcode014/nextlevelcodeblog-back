@@ -6,13 +6,13 @@ services:
     container_name: api 
     hostname: api
     environment:
-      DATABASE_URL: postgresql://myuser:mypassword@db:5432/db_blog
-      PORT: 8000
-      FRONT_URL: http://localhost:3000
-      API_KEY: nextlevelcode-blog
-      API_ENV: development
-      JWT_SECRET_KEY: my_ultra_secure_jwt_secret_key
-      JWT_MAXAGE: 60
+      DATABASE_URL: ${DATABASE_URL} 
+      PORT: ${PORT}
+      FRONT_URL: ${FRONT_URL}
+      API_KEY: ${API_KEY} 
+      API_ENV: ${API_ENV}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      JWT_MAXAGE: ${JWT_MAXAGE}
       SMTP_SERVER: ${SMTP_SERVER}
       SMTP_PORT: ${SMTP_PORT}
       SMTP_USERNAME: ${SMTP_USERNAME}
@@ -49,9 +49,9 @@ services:
     container_name: postgres_db
     hostname: db
     environment:
-      POSTGRES_USER: myuser
-      POSTGRES_PASSWORD: mypassword
-      POSTGRES_DB: db_blog
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "5432:5432"
 

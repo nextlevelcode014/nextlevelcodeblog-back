@@ -17,6 +17,8 @@ use crate::{
     middleware::{auth, configure_cors, require_api_key},
 };
 
+use tracing::error;
+
 #[derive(Clone)]
 pub struct AppState {
     pub api_key: String,
@@ -72,7 +74,11 @@ pub async fn build_app_state(config: Config, db_pool: PgPool) -> Arc<AppState> {
 }
 
 pub fn build_app(app_state: Arc<AppState>) -> Router {
+    let cors = configure_cors().unwrap_or_else(|e| {
+        error!("{:?}", e);
+        std::process::exit(1);
+    });
     create_routes(app_state.clone())
-        .layer(configure_cors())
+        .layer(cors)
         .layer(TraceLayer::new_for_http())
 }

@@ -1,4 +1,7 @@
-use std::{env, sync::Arc};
+use std::{
+    env::{self, var},
+    sync::Arc,
+};
 
 use axum::{
     extract::Request,
@@ -20,6 +23,8 @@ use crate::{
     domains::users::model::{User, UserRole},
     Error, Result,
 };
+
+use tracing::error;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct JWTAuthMiddeware {
@@ -113,15 +118,20 @@ pub async fn role_check(
     Ok(next.run(req).await)
 }
 
-pub fn configure_cors() -> CorsLayer {
+pub fn configure_cors() -> Result<CorsLayer> {
     let x_api_key = HeaderName::from_static("x-api-key");
+    let frontend_url = var("FRONT_URL").map_err(|e| {
+        error!("Environment varible FRONT_URL must be set: {:?}", e);
+        Error::InternalServerError
+    })?;
 
-    CorsLayer::new()
-        //       .allow_origin([env::var("FRONT_URL")
-        //          .expect("FRONT_URL must be set")
-        //        .parse::<HeaderValue>()
-        //      .unwrap()])
-        .allow_origin("http://localhost:3000".parse::<HeaderValue>().unwrap())
+    let origins = [frontend_url.parse::<HeaderValue>().map_err(|e| {
+        error!("Error to parser header value: {:?}", e);
+        Error::InternalServerError
+    })?];
+
+    let cors = CorsLayer::new()
+        .allow_origin(origins)
         .allow_methods(vec![
             Method::GET,
             Method::POST,
@@ -132,5 +142,7 @@ pub fn configure_cors() -> CorsLayer {
         .allow_headers(vec![AUTHORIZATION, CONTENT_TYPE, ACCEPT, x_api_key])
         .allow_credentials(true)
         .expose_headers(vec![CONTENT_DISPOSITION])
-        .max_age(std::time::Duration::from_secs(86400))
+        .max_age(std::time::Duration::from_secs(86400));
+
+    Ok(cors)
 }
