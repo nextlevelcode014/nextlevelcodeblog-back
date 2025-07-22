@@ -31,6 +31,7 @@ pub fn private_routes() -> Router {
         .route("/delete-category/{id}", delete(delete_category))
         .route("/update-category/{id}", put(update_category))
         .route("/categories", get(get_categories))
+        .route("/health", get(health))
         .layer(middleware::from_fn(|state, req, next| {
             role_check(state, req, next, vec![UserRole::Admin])
         }));
@@ -137,4 +138,10 @@ pub async fn get_categories(
         .await?;
     info!(count = categories.len(), "Fetched all categories");
     Ok((StatusCode::OK, Json(categories)))
+}
+
+#[instrument(name = "health")]
+pub async fn health() -> Result<impl IntoResponse> {
+    info!("Health Check.");
+    Ok(StatusCode::OK)
 }
