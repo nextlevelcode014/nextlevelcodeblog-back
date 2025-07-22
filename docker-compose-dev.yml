@@ -1,0 +1,70 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: api 
+    hostname: api
+    environment:
+      DATABASE_URL: postgresql://myuser:mypassword@db:5432/db_blog
+      PORT: 8000
+      FRONT_URL: http://localhost:3000
+      API_KEY: nextlevelcode-blog
+      API_ENV: development
+      JWT_SECRET_KEY: my_ultra_secure_jwt_secret_key
+      JWT_MAXAGE: 60
+      SMTP_SERVER: ${SMTP_SERVER}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USERNAME: ${SMTP_USERNAME}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+        
+    volumes:
+      - .:/app         
+      - cargo-cache:/usr/local/cargo/registry  
+    command: sleep infinity
+      
+    depends_on:
+      - db
+    restart: unless-stopped
+    networks:
+      - blog_network
+        
+  nginx:
+    image: nginx:latest
+    container_name: nginx
+    ports:
+      - "9999:9999"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/log:/var/log/nginx 
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - blog_network
+
+  db:
+    image: postgres:17
+    container_name: postgres_db
+    hostname: db
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: db_blog
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - blog_network
+
+volumes:
+  postgres_data:
+  cargo-cache:
+
+networks:
+  blog_network:
+    driver: bridge

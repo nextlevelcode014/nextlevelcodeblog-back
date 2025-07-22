@@ -1,0 +1,13 @@
+/target
+.env
+.env.local
+.sqlx
+todo.txt
+
+
+
+# Added by cargo
+#
+# already existing elements were commented out
+
+#/target
