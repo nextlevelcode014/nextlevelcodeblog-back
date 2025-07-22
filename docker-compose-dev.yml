@@ -20,7 +20,6 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
         
     volumes:
-      - .:/app         
       - cargo-cache:/usr/local/cargo/registry  
     command: sleep infinity
       
