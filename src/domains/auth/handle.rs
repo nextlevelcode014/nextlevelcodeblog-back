@@ -24,7 +24,7 @@ use crate::{
     Error, Result,
 };
 
-pub fn auth_houtes() -> Router {
+pub fn auth_routes() -> Router {
     Router::new()
         .route("/register", post(register))
         .route("/login", post(login))

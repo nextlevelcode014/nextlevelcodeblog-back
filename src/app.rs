@@ -2,12 +2,16 @@ use std::{env::var, sync::Arc};
 
 use axum::{middleware as axum_middleware, Extension, Router};
 use sqlx::PgPool;
+use tower::ServiceBuilder;
+use tower_governor::{
+    governor::GovernorConfigBuilder, key_extractor::SmartIpKeyExtractor, GovernorLayer,
+};
 use tower_http::trace::TraceLayer;
 
 use crate::{
     config::Config,
     domains::{
-        auth::{handle::auth_houtes, service::AuthService},
+        auth::{handle::auth_routes, service::AuthService},
         posts::{handle::news_post_routes, service::NewsPostsService},
         private::{handle::private_routes, service::PrivateService},
         recaptcha::service::RecaptchaService,
@@ -32,6 +36,19 @@ pub struct AppState {
 }
 
 pub fn create_routes(app_state: Arc<AppState>) -> Router {
+    let api_governor_conf = Arc::new(
+        GovernorConfigBuilder::default()
+            .per_second(5)
+            .burst_size(2)
+            .use_headers()
+            .key_extractor(SmartIpKeyExtractor)
+            .finish()
+            .unwrap_or_else(|| {
+                error!("Failed to build rate limiter config");
+                std::process::exit(1);
+            }),
+    );
+
     let api_route = Router::new()
         .nest(
             "/private",
@@ -39,7 +56,7 @@ pub fn create_routes(app_state: Arc<AppState>) -> Router {
                 .layer(axum_middleware::from_fn(auth))
                 .layer(axum_middleware::from_fn(require_api_key)),
         )
-        .nest("/auth", auth_houtes())
+        .nest("/auth", auth_routes())
         .nest(
             "/users",
             users_houtes().layer(axum_middleware::from_fn(auth)),
@@ -51,7 +68,11 @@ pub fn create_routes(app_state: Arc<AppState>) -> Router {
         .layer(TraceLayer::new_for_http())
         .layer(Extension(app_state));
 
-    Router::new().nest("/api", api_route)
+    Router::new()
+        .nest("/api", api_route)
+        .layer(ServiceBuilder::new().layer(GovernorLayer {
+            config: api_governor_conf,
+        }))
 }
 
 pub async fn build_app_state(config: Config, db_pool: PgPool) -> Arc<AppState> {
@@ -74,11 +95,27 @@ pub async fn build_app_state(config: Config, db_pool: PgPool) -> Arc<AppState> {
 }
 
 pub fn build_app(app_state: Arc<AppState>) -> Router {
+    let general_governor_conf = Arc::new(
+        GovernorConfigBuilder::default()
+            .per_second(60)
+            .burst_size(10)
+            .use_headers()
+            .key_extractor(SmartIpKeyExtractor)
+            .finish()
+            .unwrap_or_else(|| {
+                error!("Failed to build rate limiter config");
+                std::process::exit(1);
+            }),
+    );
+
     let cors = configure_cors().unwrap_or_else(|e| {
         error!("{:?}", e);
         std::process::exit(1);
     });
     create_routes(app_state.clone())
         .layer(cors)
+        .layer(ServiceBuilder::new().layer(GovernorLayer {
+            config: general_governor_conf,
+        }))
         .layer(TraceLayer::new_for_http())
 }
