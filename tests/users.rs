@@ -13,7 +13,6 @@ use crate::common::{
 mod common;
 
 #[sqlx::test(migrations = "./migrations")]
-#[ignore = "Prod"]
 async fn users_test(pg_pool: PgPool) {
     init_logger();
 
@@ -59,21 +58,6 @@ async fn users_test(pg_pool: PgPool) {
         .assert_status_ok();
 
     server
-        .post("/api/users/delete")
-        .add_header("Authorization", format!("Bearer {}", token))
-        .json(&serde_json::json!({
-            "password": config_test.test_password
-        }))
-        .await
-        .assert_status(StatusCode::NO_CONTENT);
-
-    server
-        .delete("/api/users/google-user-delete")
-        .add_header("Authorization", format!("Bearer {}", token))
-        .await
-        .assert_status(StatusCode::NO_CONTENT);
-
-    server
         .put("/api/users/update-password")
         .add_header("Authorization", format!("Bearer {}", token))
         .json(&serde_json::json!({
@@ -83,4 +67,13 @@ async fn users_test(pg_pool: PgPool) {
         }))
         .await
         .assert_status_ok();
+
+    server
+        .post("/api/users/delete")
+        .add_header("Authorization", format!("Bearer {}", token))
+        .json(&serde_json::json!({
+            "password": "Updated password",
+        }))
+        .await
+        .assert_status(StatusCode::NO_CONTENT);
 }

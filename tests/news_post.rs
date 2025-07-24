@@ -17,7 +17,6 @@ use crate::common::{
 mod common;
 
 #[sqlx::test(migrations = "./migrations")]
-#[ignore = "Prod"]
 async fn news_post_test(pg_pool: PgPool) {
     init_logger();
     let config_test = ConfigTest::init();

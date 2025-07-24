@@ -17,7 +17,6 @@ use crate::common::{
 mod common;
 
 #[sqlx::test(migrations = "./migrations")]
-#[ignore = "Prod"]
 async fn private_test(pg_pool: PgPool) {
     init_logger();
     let config_test = ConfigTest::init();
@@ -61,6 +60,13 @@ async fn private_test(pg_pool: PgPool) {
     let server = test_server(&pg_pool).await;
 
     let token = generate_test_token(&pg_pool, admin.id).await;
+
+    server
+        .get("/api/private/admin/health")
+        .add_header("x-api-key", std::env::var("API_KEY").unwrap())
+        .add_header("Authorization", format!("Bearer {}", token))
+        .await
+        .assert_status_ok();
 
     server
         .get("/api/private/admin/users")
@@ -132,38 +138,4 @@ async fn private_test(pg_pool: PgPool) {
         }))
         .await
         .assert_status(StatusCode::NO_CONTENT);
-}
-
-#[sqlx::test(migrations = "./migrations")]
-async fn health_private_test(pg_pool: PgPool) {
-    init_logger();
-    let config_test = ConfigTest::init();
-
-    let user = create_user_test(
-        &pg_pool,
-        &CreateUser {
-            auth_provider: AuthProvider::Credentials,
-            email: config_test.test_email,
-            email_verified: true,
-            google_sub: None,
-            name: config_test.test_name.to_owned(),
-            password_hash: Some(config_test.test_password.to_owned()),
-            picture: None,
-            token_expires_at: None,
-            verification_token: Some(config_test.test_password.to_owned()),
-        },
-        UserRole::Admin,
-    )
-    .await
-    .unwrap();
-
-    let token = generate_test_token(&pg_pool, user.id).await;
-    let server = test_server(&pg_pool).await;
-
-    server
-        .get("/api/private/admin/health")
-        .add_header("x-api-key", std::env::var("API_KEY").unwrap())
-        .add_header("Authorization", format!("Bearer {}", token))
-        .await
-        .assert_status_ok();
 }

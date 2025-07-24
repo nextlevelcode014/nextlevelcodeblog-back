@@ -13,7 +13,6 @@ use crate::common::{
 mod common;
 
 #[sqlx::test(migrations = "./migrations")]
-#[ignore = "Prod"]
 async fn google_users_test(pg_pool: PgPool) {
     init_logger();
 
