@@ -25,16 +25,11 @@ pub fn news_post_routes() -> Router {
             "/get-all-posts-with-comments",
             get(get_all_posts_with_comments),
         )
-        .route(
-            "/get-post-with-comments-by-id/{id}",
-            get(get_posts_with_comments_by_id),
-        )
-        .route("/get-posts-with-comments", get(get_posts_with_comments))
         .route("/create-post", post(create_post))
-        .route("/update-post/{id}", put(update_post))
+        .route("/update-post", put(update_post))
         .route("/delete-post/{id}", delete(delete_post))
         .route("/create-comment", post(create_comment))
-        .route("/update-comment/{id}", put(update_comment))
+        .route("/update-comment", put(update_comment))
         .route("/delete-comment/{id}", delete(delete_comment))
 }
 
@@ -61,33 +56,6 @@ pub async fn get_all_posts_with_comments(
     Ok((StatusCode::OK, Json(posts)))
 }
 
-#[instrument(name = "get_posts_with_comments", skip(app_state))]
-pub async fn get_posts_with_comments(
-    Extension(app_state): Extension<Arc<AppState>>,
-) -> Result<impl IntoResponse> {
-    info!("Fetching posts with comments");
-    let posts = app_state
-        .news_post_service
-        .get_posts_with_comments()
-        .await?;
-    info!(count = posts.len(), "Fetched posts with comments");
-    Ok((StatusCode::OK, Json(posts)))
-}
-
-#[instrument(name = "get_post_with_comments_by_id", skip(app_state))]
-pub async fn get_posts_with_comments_by_id(
-    Extension(app_state): Extension<Arc<AppState>>,
-    Path(post_id): Path<String>,
-) -> Result<impl IntoResponse> {
-    info!(%post_id, "Fetching post with comments by ID");
-    let posts = app_state
-        .news_post_service
-        .get_posts_with_comments_by_id(&post_id)
-        .await?;
-    info!(count = posts.len(), "Fetched post with comments");
-    Ok((StatusCode::OK, Json(posts)))
-}
-
 #[instrument(name = "create_post", skip(app_state, jwt, news_post))]
 pub async fn create_post(
     Extension(app_state): Extension<Arc<AppState>>,
@@ -107,21 +75,20 @@ pub async fn create_post(
 pub async fn update_post(
     Extension(app_state): Extension<Arc<AppState>>,
     Extension(jwt): Extension<JWTAuthMiddeware>,
-    Path(news_post_id): Path<String>,
     Json(update_news_post): Json<UpdateNewsPost>,
 ) -> Result<impl IntoResponse> {
-    info!(%news_post_id, "Updating post");
+    info!(%update_news_post.id, "Updating post");
     app_state
         .news_post_service
         .update_news_post(
             jwt.user.id,
-            &news_post_id,
+            &update_news_post.id,
             update_news_post.url.as_deref(),
             update_news_post.title.as_deref(),
             update_news_post.description.as_deref(),
         )
         .await?;
-    info!(%news_post_id, "Post updated successfully");
+    info!(%update_news_post.id, "Post updated successfully");
     Ok(StatusCode::CREATED)
 }
 
@@ -163,19 +130,18 @@ pub async fn create_comment(
 pub async fn update_comment(
     Extension(app_state): Extension<Arc<AppState>>,
     Extension(jwt): Extension<JWTAuthMiddeware>,
-    Path(comment_id): Path<String>,
     Json(news_comment_post): Json<UpdatePostCommentDto>,
 ) -> Result<impl IntoResponse> {
-    info!(%comment_id, "Updating comment");
+    info!(%news_comment_post.id, "Updating comment");
     app_state
         .news_post_service
         .update_comment(
-            &comment_id,
+            &news_comment_post.id,
             news_comment_post.content.as_deref(),
             jwt.user.id,
         )
         .await?;
-    info!(%comment_id, "Comment updated successfully");
+    info!(%news_comment_post.id, "Comment updated successfully");
     Ok(StatusCode::OK)
 }
 

@@ -58,7 +58,7 @@ pub async fn generate_test_token(pool: &PgPool, user_id: uuid::Uuid) -> String {
 
     let auth_service = AuthService::with_default_config(repo);
     auth_service
-        .generate_token(&user_id.to_string(), 3600)
+        .generate_token(user_id.to_string(), 3600)
         .unwrap()
 }
 pub fn generate_test_password_hash(password: &str) -> String {

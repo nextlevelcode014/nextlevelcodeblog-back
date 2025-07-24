@@ -89,10 +89,7 @@ pub async fn auth(mut req: Request, next: Next) -> Result<impl IntoResponse> {
             .get_user(Some(user_id), None, None, None, None)
             .await?
     } else {
-        app_state
-            .users_service
-            .get_user(None, None, None, None, Some(&token_details.sub))
-            .await?
+        return Err(Error::Unauthorized);
     };
 
     req.extensions_mut().insert(JWTAuthMiddeware { user });

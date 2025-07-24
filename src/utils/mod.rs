@@ -65,13 +65,12 @@ pub fn validate_dto<T: Validate>(dto: &T) -> Result<()> {
         let mut errors = std::collections::HashMap::new();
 
         for (field, field_errors) in validation_errors.field_errors() {
-            let messages: Vec<String> = field_errors
+            // Pega a primeira mensagem disponível, se existir
+            if let Some(first_error) = field_errors
                 .iter()
-                .filter_map(|error| error.message.as_ref().map(|msg| msg.to_string()))
-                .collect();
-
-            if !messages.is_empty() {
-                errors.insert(field.to_string(), messages);
+                .find_map(|error| error.message.as_ref())
+            {
+                errors.insert(field.to_string(), first_error.to_string());
             }
         }
 

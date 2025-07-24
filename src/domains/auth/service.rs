@@ -7,7 +7,6 @@ use argon2::{
 use chrono::{Duration, Utc};
 use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
 use jsonwebtoken::{encode, EncodingKey, Header};
-use reqwest::Client;
 use serde::Serialize;
 use tracing::{debug, error, info, instrument, warn};
 use uuid::Uuid;
@@ -63,7 +62,7 @@ impl Default for AuthConfig {
 pub struct AuthService {
     repo: PostgresRepo,
     config: AuthConfig,
-    http_client: Client,
+    // http_client: Client,
 }
 
 #[derive(Debug, Serialize)]
@@ -78,7 +77,7 @@ impl AuthService {
         Self {
             repo,
             config,
-            http_client: Client::new(),
+            //http_client: Client::new(),
         }
     }
 
@@ -122,7 +121,7 @@ impl AuthService {
 
         info!(user_id = %user.id, "Login successful");
 
-        let token = self.generate_token(&user.id.to_string(), self.config.jwt_expiration)?;
+        let token = self.generate_token(user.id.to_string(), self.config.jwt_expiration)?;
         let expires_at = (Utc::now() + Duration::minutes(self.config.jwt_expiration)).timestamp();
 
         Ok(LoginResult {
@@ -157,7 +156,7 @@ impl AuthService {
         send_welcome_email(&user.email, &user.name).await?;
 
         info!(user_id = %user.id, "Email verified successfully");
-        self.generate_token(&user.id.to_string(), self.config.jwt_expiration)
+        self.generate_token(user.id.to_string(), self.config.jwt_expiration)
     }
 
     #[instrument(name = "auth_forgot_password", skip(self), fields(email = %email))]
@@ -226,16 +225,34 @@ impl AuthService {
     pub async fn handle_google_login(&self, token: &str) -> Result<GoogleUserInfoReturn> {
         debug!("Processing Google login");
 
-        let user_info = self.get_google_user_info(token).await?;
+        let claims = self.verify_google_token_jwks(token).await?;
+
         let existing_user = self
             .repo
-            .get_user(None, None, Some(&user_info.email), None, None)
+            .get_user(None, None, Some(&claims.email), None, None)
             .await?;
 
         match existing_user {
             None => {
                 debug!("Creating new Google user");
-                self.create_google_user(&user_info).await?;
+                let google_user_info = GoogleUserInfo {
+                    email: claims.email,
+                    email_verified: claims.email_verified,
+                    name: claims.name,
+                    picture: claims.picture,
+                    sub: claims.sub,
+                };
+
+                let google_user = self.create_google_user(&google_user_info).await?;
+
+                let jwt_token =
+                    self.generate_token(google_user.id.to_string(), self.config.jwt_expiration)?;
+
+                return Ok(GoogleUserInfoReturn {
+                    email: google_user.email,
+                    name: google_user.name,
+                    token: jwt_token,
+                });
             }
             Some(user) => {
                 if user.auth_provider == AuthProvider::Credentials {
@@ -243,17 +260,16 @@ impl AuthService {
                     return Err(Error::Conflict);
                 }
                 debug!(user_id = %user.id, "Existing Google user found");
+                let jwt_token =
+                    self.generate_token(user.id.to_string(), self.config.jwt_expiration)?;
+
+                Ok(GoogleUserInfoReturn {
+                    email: user.email,
+                    name: user.name,
+                    token: jwt_token,
+                })
             }
         }
-
-        let claims = self.verify_google_token_jwks(token).await?;
-        let jwt_token = self.generate_token(&claims.sub, self.config.jwt_expiration)?;
-
-        Ok(GoogleUserInfoReturn {
-            email: user_info.email,
-            name: user_info.name,
-            token: jwt_token,
-        })
     }
 
     #[instrument(name = "verify_google_token_jwks", skip_all)]
@@ -430,25 +446,6 @@ impl AuthService {
         Uuid::now_v7().to_string()
     }
 
-    async fn get_google_user_info(&self, token: &str) -> Result<GoogleUserInfo> {
-        let url = format!("https://oauth2.googleapis.com/tokeninfo?id_token={}", token);
-
-        let response = self.http_client.get(&url).send().await.map_err(|e| {
-            error!(error = %e, "Failed to call Google tokeninfo API");
-            Error::Unauthorized
-        })?;
-
-        if !response.status().is_success() {
-            error!(status = %response.status(), "Google tokeninfo API returned error");
-            return Err(Error::Unauthorized);
-        }
-
-        response.json::<GoogleUserInfo>().await.map_err(|e| {
-            error!(error = %e, "Failed to parse Google user info");
-            Error::Unauthorized
-        })
-    }
-
     async fn create_google_user(&self, user_info: &GoogleUserInfo) -> Result<User> {
         let create_user = CreateUser {
             name: user_info.name.clone(),
@@ -465,13 +462,13 @@ impl AuthService {
         self.repo.create_user(&create_user).await
     }
 
-    pub fn generate_token(&self, user_id: &str, expires_in_minutes: i64) -> Result<String> {
+    pub fn generate_token(&self, user_id: String, expires_in_minutes: i64) -> Result<String> {
         let now = Utc::now();
         let exp = (now + Duration::minutes(expires_in_minutes)).timestamp() as usize;
         let iat = now.timestamp() as usize;
 
         let claims = Claims {
-            sub: user_id.to_string(),
+            sub: user_id,
             iat,
             exp,
         };
