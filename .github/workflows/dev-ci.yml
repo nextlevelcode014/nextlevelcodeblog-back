@@ -2,9 +2,9 @@ name: CI Dev - Docker Builder
 
 on:
   push:
-    branches: ["dev"]
+    branches: ["dev", "prod"]
   pull_request:
-    branches: ["dev"]
+    branches: [""]
 
 jobs:
   test:
