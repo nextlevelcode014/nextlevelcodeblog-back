@@ -4,7 +4,7 @@ use axum::{middleware as axum_middleware, Extension, Router};
 use sqlx::PgPool;
 use tower::ServiceBuilder;
 use tower_governor::{
-    governor::GovernorConfigBuilder, key_extractor::GlobalKeyExtractor, GovernorLayer,
+    governor::GovernorConfigBuilder, key_extractor::SmartIpKeyExtractor, GovernorLayer,
 };
 use tower_http::trace::TraceLayer;
 
@@ -38,10 +38,10 @@ pub struct AppState {
 pub fn create_routes(app_state: Arc<AppState>) -> Router {
     let api_governor_conf = Arc::new(
         GovernorConfigBuilder::default()
-            .per_second(100)
+            .per_second(80)
             .burst_size(10)
             .use_headers()
-            .key_extractor(GlobalKeyExtractor)
+            .key_extractor(SmartIpKeyExtractor)
             .finish()
             .unwrap_or_else(|| {
                 error!("Failed to build rate limiter config");
@@ -100,7 +100,7 @@ pub fn build_app(app_state: Arc<AppState>) -> Router {
             .per_second(60)
             .burst_size(10)
             .use_headers()
-            .key_extractor(GlobalKeyExtractor)
+            .key_extractor(SmartIpKeyExtractor)
             .finish()
             .unwrap_or_else(|| {
                 error!("Failed to build rate limiter config");

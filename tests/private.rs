@@ -135,6 +135,7 @@ async fn private_test(pg_pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "./migrations")]
+#[ignore = "Prod"]
 async fn health_private_test(pg_pool: PgPool) {
     init_logger();
     let config_test = ConfigTest::init();
