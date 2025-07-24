@@ -10,13 +10,13 @@ use crate::{
     domains::{
         private::repository::PrivateRepository,
         users::{
-            model::User,
+            model::{AuthProvider, User},
             query::{NameUpdateDto, UserPasswordUpdateDto},
             repository::UserRepository,
         },
     },
     infrastructure::db::PostgresRepo,
-    Error, Result,
+    validation_error, Error, Result,
 };
 
 use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
@@ -75,24 +75,19 @@ impl UserService {
         Ok(decode.claims)
     }
 
-    #[instrument(name = "delete_user", skip(self))]
-    pub async fn delete_user(&self, user_id: &str) -> Result<()> {
-        let user_id = Uuid::parse_str(user_id).map_err(|_| {
-            warn!(user_id = %user_id, "Invalid user ID format");
-            Error::BadRequest {
-                message: "Invalid ID format".into(),
-            }
-        })?;
-        info!(%user_id, "Deleting user");
-        self.repo.delete_user(user_id).await?;
-        info!(%user_id, "User deleted successfully");
-        Ok(())
-    }
+    #[instrument(name = "delete_user", skip(self, user, password))]
+    pub async fn delete_user(&self, user: &User, password: String) -> Result<()> {
+        info!(%user.id, "Deleting user");
 
-    #[instrument(name = "update_username", skip(self, user, user_update))]
-    pub async fn update_username(&self, user: &User, user_update: NameUpdateDto) -> Result<()> {
+        if user.auth_provider != AuthProvider::Credentials {
+            warn!("Invalid provider for delete user");
+            return Err(Error::BadRequest {
+                message: "Invalid provider".into(),
+            });
+        }
+
         let password_hash = user.password_hash.clone().ok_or_else(|| {
-            warn!("Password is required for login");
+            warn!("Missing password hash while attempting to delete user");
             Error::BadRequest {
                 message: "Password is required".into(),
             }
@@ -100,10 +95,61 @@ impl UserService {
 
         let argon2 = Argon2::default();
         let parsed_hash = PasswordHash::new(&password_hash)?;
-        argon2.verify_password(user_update.password.as_bytes(), &parsed_hash)?;
 
+        if argon2
+            .verify_password(password.as_bytes(), &parsed_hash)
+            .is_err()
+        {
+            warn!(user_id = %user.id, "Incorrect password while attempting to delete user");
+            return Err(validation_error!("password", "Incorrect password!"));
+        }
+        self.repo.delete_user(user.id).await?;
+        info!(%user.id, "User deleted successfully");
+        Ok(())
+    }
+
+    #[instrument(name = "delete_google_user", skip(self, user))]
+    pub async fn delete_google_user(&self, user: &User) -> Result<()> {
+        info!(%user.id, "Deleting google user");
+
+        if user.auth_provider != AuthProvider::Google {
+            warn!("Invalid provider for delete google user");
+            return Err(Error::BadRequest {
+                message: "Invalid provider".into(),
+            });
+        }
+
+        self.repo.delete_user(user.id).await?;
+        info!(%user.id, "Google user deleted successfully");
+        Ok(())
+    }
+
+    #[instrument(name = "update_username", skip(self, user, user_update))]
+    pub async fn update_username(&self, user: &User, user_update: NameUpdateDto) -> Result<()> {
         if user_update.name == user.name {
-            return Err(Error::Conflict);
+            return Err(validation_error!(
+                "name",
+                "New username is the same as current one!"
+            ));
+        }
+
+        let password_hash = user.password_hash.clone().ok_or_else(|| {
+            warn!("Missing password hash while attempting to update username");
+            Error::BadRequest {
+                message: "Password is required".into(),
+            }
+        })?;
+
+        let argon2 = Argon2::default();
+        let parsed_hash = PasswordHash::new(&password_hash)
+            .map_err(|_| validation_error!("password", "Incorrect password!"))?;
+
+        if argon2
+            .verify_password(user_update.password.as_bytes(), &parsed_hash)
+            .is_err()
+        {
+            warn!(user_id = %user.id, "Incorrect password while attempting to update username");
+            return Err(validation_error!("password", "Incorrect password!"));
         }
 
         info!(user_id = %user.id, "Updating username");
@@ -129,16 +175,26 @@ impl UserService {
         })?;
 
         let argon2 = Argon2::default();
-        let parsed_hash = PasswordHash::new(&password_hash)?;
+        let parsed_hash = PasswordHash::new(&password_hash)
+            .map_err(|_| validation_error!("password", "Incorrect password!"))?;
 
-        argon2.verify_password(user_update.old_password.as_bytes(), &parsed_hash)?;
+        if argon2
+            .verify_password(user_update.old_password.as_bytes(), &parsed_hash)
+            .is_err()
+        {
+            warn!(user_id = %user.id, "Incorrect password while attempting to update username");
+            return Err(validation_error!("password", "Incorrect password!"));
+        }
 
         if argon2
             .verify_password(user_update.new_password.as_bytes(), &parsed_hash)
             .is_ok()
         {
             warn!("New password is the same as current password!");
-            return Err(Error::Conflict);
+            return Err(validation_error!(
+                "password",
+                "New password is the same as current password!"
+            ));
         }
 
         let salt = SaltString::generate(&mut OsRng);

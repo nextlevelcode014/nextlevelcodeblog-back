@@ -9,6 +9,7 @@ pub struct PostCommentDto {
 
 #[derive(Debug, Deserialize, Serialize, sqlx::FromRow, Clone)]
 pub struct UpdatePostCommentDto {
+    pub id: String,
     pub content: Option<String>,
 }
 
@@ -21,6 +22,7 @@ pub struct CreateNewsPostDto {
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateNewsPost {
+    pub id: String,
     pub title: Option<String>,
     pub url: Option<String>,
     pub description: Option<String>,

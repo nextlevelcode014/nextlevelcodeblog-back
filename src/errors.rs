@@ -12,7 +12,6 @@ use crate::domains::auth::model::AuthResponse;
 
 pub type Result<T> = core::result::Result<T, Error>;
 
-/// Identificador único para rastreamento de erros
 #[derive(Debug, Clone, Serialize)]
 pub struct ErrorId(String);
 
@@ -80,9 +79,7 @@ pub enum Error {
     GoogleLogin { response: AuthResponse },
 
     #[error("Validation error")]
-    ValidationError {
-        errors: HashMap<String, Vec<String>>,
-    },
+    ValidationError { errors: HashMap<String, String> },
 
     #[error("Rate limit exceeded")]
     RateLimitExceeded,
@@ -109,7 +106,7 @@ pub enum Error {
 pub struct ValidationResponse {
     pub code: u16,
     pub message: String,
-    pub errors: Option<HashMap<String, Vec<String>>>,
+    pub errors: Option<HashMap<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error_id: Option<String>,
 }
@@ -163,7 +160,7 @@ impl Error {
     }
 
     /// Cria um erro de validação
-    pub fn validation(errors: HashMap<String, Vec<String>>) -> Self {
+    pub fn validation(errors: HashMap<String, String>) -> Self {
         Self::ValidationError { errors }
     }
 
@@ -460,19 +457,18 @@ impl From<reqwest::Error> for Error {
     }
 }
 
-// Helper macros para criar erros de validação facilmente
 #[macro_export]
 macro_rules! validation_error {
     ($field:expr, $message:expr) => {{
         let mut errors = std::collections::HashMap::new();
-        errors.insert($field.to_string(), vec![$message.to_string()]);
+        errors.insert($field.to_string(), $message.to_string());
         $crate::Error::validation(errors)
     }};
 
     ($($field:expr => $message:expr),+ $(,)?) => {{
         let mut errors = std::collections::HashMap::new();
         $(
-            errors.insert($field.to_string(), vec![$message.to_string()]);
+            errors.insert($field.to_string(), $message.to_string());
         )+
         $crate::Error::validation(errors)
     }};
