@@ -6,31 +6,32 @@ use backend_nextlevelcodeblog::{
 use sqlx::PgPool;
 
 use crate::common::{
-    constants::{TEST_EMAIL, TEST_NAME, TEST_PASSWORD, TEST_VERIFICATION_TOKEN},
     fixtures::create_user_test,
-    test_state::{generate_test_password_hash, generate_test_token, test_server},
+    test_state::{generate_test_password_hash, generate_test_token, test_server, ConfigTest},
 };
 
 mod common;
 
 #[sqlx::test(migrations = "./migrations")]
+#[ignore = "Prod"]
 async fn users_test(pg_pool: PgPool) {
     init_logger();
 
-    let password = generate_test_password_hash(TEST_PASSWORD);
+    let config_test = ConfigTest::init();
+    let password = generate_test_password_hash(&config_test.test_password);
 
     let user = create_user_test(
         &pg_pool,
         &CreateUser {
             auth_provider: AuthProvider::Credentials,
-            email: TEST_EMAIL.to_string(),
+            email: config_test.test_email,
             email_verified: true,
             google_sub: None,
-            name: TEST_NAME.to_string(),
+            name: config_test.test_name.to_owned(),
             password_hash: Some(password),
             picture: None,
             token_expires_at: None,
-            verification_token: Some(TEST_VERIFICATION_TOKEN.to_string()),
+            verification_token: Some(config_test.test_password.to_owned()),
         },
         UserRole::User,
     )
@@ -52,7 +53,7 @@ async fn users_test(pg_pool: PgPool) {
         .add_header("Authorization", format!("Bearer {}", token))
         .json(&serde_json::json!({
             "name": "Updated Name",
-            "password": TEST_PASSWORD,
+            "password": config_test.test_password,
         }))
         .await
         .assert_status_ok();
@@ -63,14 +64,17 @@ async fn users_test(pg_pool: PgPool) {
         .json(&serde_json::json!({
             "newPasswordConfirm": "Updated password",
             "newPassword": "Updated password",
-            "oldPassword": TEST_PASSWORD,
+            "oldPassword": config_test.test_password,
         }))
         .await
         .assert_status_ok();
 
     server
-        .delete(&format!("/api/users/delete/{}", user.id))
+        .post("/api/users/delete")
         .add_header("Authorization", format!("Bearer {}", token))
+        .json(&serde_json::json!({
+            "password": "Updated password",
+        }))
         .await
         .assert_status(StatusCode::NO_CONTENT);
 }

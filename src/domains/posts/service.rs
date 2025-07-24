@@ -1,6 +1,6 @@
 use crate::{
     domains::posts::{
-        model::{NewsPost, PostCommentWithComment},
+        model::{NewsPost, NewsPostWithComments},
         query::CreateNewsPostDto,
         repository::NewsPostsRepository,
     },
@@ -101,31 +101,8 @@ impl NewsPostsService {
         Ok(())
     }
 
-    #[instrument(name = "get_posts_with_comments", skip(self))]
-    pub async fn get_posts_with_comments(&self) -> Result<Vec<PostCommentWithComment>> {
-        let posts = self.repo.get_posts_with_comments().await?;
-        info!(count = posts.len(), "Retrieved posts with comments");
-        Ok(posts)
-    }
-
-    #[instrument(name = "get_posts_with_comments_by_id", skip(self))]
-    pub async fn get_posts_with_comments_by_id(
-        &self,
-        post_id: &str,
-    ) -> Result<Vec<PostCommentWithComment>> {
-        let post_id = Uuid::parse_str(post_id).map_err(|_| {
-            warn!(%post_id, "Invalid post ID format");
-            Error::BadRequest {
-                message: "Invalid ID format".into(),
-            }
-        })?;
-        info!(%post_id, "Retrieving post with comments by ID");
-        let posts = self.repo.get_post_with_comments_by_id(post_id).await?;
-        Ok(posts)
-    }
-
     #[instrument(name = "get_all_posts_with_comments", skip(self))]
-    pub async fn get_all_posts_with_comments(&self) -> Result<Vec<PostCommentWithComment>> {
+    pub async fn get_all_posts_with_comments(&self) -> Result<Vec<NewsPostWithComments>> {
         let posts_with_comments = self.repo.get_all_posts_with_comments().await?;
         info!(
             count = posts_with_comments.len(),

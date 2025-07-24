@@ -23,6 +23,21 @@ jobs:
           SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}
           RECAPTCHA_SECRET_KEY=${{ secrets.RECAPTCHA_SECRET_KEY }}
           GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
+          TEST_EMAIL=${{ secrets.TEST_EMAIL }}
+          TEST_NAME=${{ secrets.TEST_NAME }}
+          TEST_PASSWORD=${{ secrets.TEST_PASSWORD }}
+          TEST_EMAIL_ADMIN=${{ secrets.TEST_EMAIL_ADMIN }}
+          TEST_VERIFICATION_TOKEN=${{ secrets.TEST_VERIFICATION_TOKEN }}
+          JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
+          JWT_MAXAGE=${{ secrets.JWT_MAXAGE }}
+          PORT=${{ secrets.PORT }}
+          FRONT_URL=${{ secrets.FRONT_URL }}
+          API_ENV=${{ secrets.API_ENV }}
+          DATABASE_URL=${{ secrets.DATABASE_URL }}
+          API_KEY=${{ secrets.API_KEY }}
+          POSTGRES_USER=${{ secrets.POSTGRES_USER}}
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB=${{ secrets.POSTGRES_DB }}
           EOF
 
       - name: Set up Docker Buildx
@@ -40,7 +55,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: Dockerfile.dev 
+          file: Dockerfile.dev
           tags: api
           push: false
           load: true

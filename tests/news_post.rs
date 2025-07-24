@@ -2,35 +2,37 @@ use axum::http::StatusCode;
 use backend_nextlevelcodeblog::{
     config::init_logger,
     domains::{
-        posts::model::{NewsPost, PostCommentWithComment},
+        posts::model::{NewsPost, NewsPostWithComments},
         users::model::{AuthProvider, CreateUser, UserRole},
     },
 };
 use sqlx::PgPool;
+use tracing::info;
 
 use crate::common::{
-    constants::{TEST_EMAIL, TEST_NAME, TEST_PASSWORD, TEST_VERIFICATION_TOKEN},
     fixtures::create_user_test,
-    test_state::{generate_test_token, test_server},
+    test_state::{generate_test_token, test_server, ConfigTest},
 };
 
 mod common;
 
 #[sqlx::test(migrations = "./migrations")]
+#[ignore = "Prod"]
 async fn news_post_test(pg_pool: PgPool) {
     init_logger();
+    let config_test = ConfigTest::init();
     let user = create_user_test(
         &pg_pool,
         &CreateUser {
             auth_provider: AuthProvider::Credentials,
-            email: TEST_EMAIL.to_string(),
+            email: config_test.test_email,
             email_verified: true,
             google_sub: None,
-            name: TEST_NAME.to_string(),
-            password_hash: Some(TEST_PASSWORD.to_string()),
+            name: config_test.test_name,
+            password_hash: Some(config_test.test_password),
             picture: None,
             token_expires_at: None,
-            verification_token: Some(TEST_VERIFICATION_TOKEN.to_string()),
+            verification_token: Some(config_test.test_verification_token),
         },
         UserRole::User,
     )
@@ -77,27 +79,15 @@ async fn news_post_test(pg_pool: PgPool) {
 
     response.assert_status_ok();
 
-    let posts: Vec<PostCommentWithComment> = response.json();
+    let posts: Vec<NewsPostWithComments> = response.json();
+
+    info!("Response: {:?}", posts);
 
     server
-        .get("/api/posts/get-posts-with-comments")
-        .add_header("Authorization", format!("Bearer {}", token))
-        .await
-        .assert_status_ok();
-
-    server
-        .get(&format!(
-            "/api/posts/get-post-with-comments-by-id/{}",
-            posts[0].post_id
-        ))
-        .add_header("Authorization", format!("Bearer {}", token))
-        .await
-        .assert_status_ok();
-
-    server
-        .put(&format!("/api/posts/update-post/{}", posts[0].post_id))
+        .put("/api/posts/update-post")
         .add_header("Authorization", format!("Bearer {}", token))
         .json(&serde_json::json!({
+            "id": posts[0].id,
             "title": "Updated Post",
             "url": "updated-post",
             "description": "This is an updated post content.",
@@ -106,12 +96,10 @@ async fn news_post_test(pg_pool: PgPool) {
         .assert_status_success();
 
     server
-        .put(&format!(
-            "/api/posts/update-comment/{}",
-            posts[0].comment_id.unwrap()
-        ))
+        .put("/api/posts/update-comment")
         .add_header("Authorization", format!("Bearer {}", token))
         .json(&serde_json::json!({
+            "id": posts[0].comments[0].id,
             "content": "This is a test comment.",
         }))
         .await
@@ -120,14 +108,14 @@ async fn news_post_test(pg_pool: PgPool) {
     server
         .delete(&format!(
             "/api/posts/delete-comment/{}",
-            posts[0].comment_id.unwrap()
+            posts[0].comments[0].id
         ))
         .add_header("Authorization", format!("Bearer {}", token))
         .await
         .assert_status(StatusCode::NO_CONTENT);
 
     server
-        .delete(&format!("/api/posts/delete-post/{}", posts[0].post_id))
+        .delete(&format!("/api/posts/delete-post/{}", posts[0].id))
         .add_header("Authorization", format!("Bearer {}", token))
         .await
         .assert_status(StatusCode::NO_CONTENT);

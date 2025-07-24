@@ -1,6 +1,9 @@
+use std::collections::HashMap;
+
 use crate::{
     domains::posts::model::{
-        AuthorCommentId, AuthorId, NewsPost, PostComment, PostCommentWithComment,
+        AuthorCommentId, AuthorId, NewsPost, NewsPostWithComments, PostComment,
+        PostCommentWithAuthor, PostWithCommentRow,
     },
     infrastructure::db::PostgresRepo,
     Result,
@@ -36,12 +39,7 @@ pub trait NewsPostsRepository: Sync + Send {
     ) -> Result<PostComment>;
     async fn update_comment(&self, comment_id: Uuid, content: Option<&str>) -> Result<()>;
     async fn delete_comment(&self, comment_id: Uuid) -> Result<()>;
-    async fn get_posts_with_comments(&self) -> Result<Vec<PostCommentWithComment>>;
-    async fn get_all_posts_with_comments(&self) -> Result<Vec<PostCommentWithComment>>;
-    async fn get_post_with_comments_by_id(
-        &self,
-        post_id: Uuid,
-    ) -> Result<Vec<PostCommentWithComment>>;
+    async fn get_all_posts_with_comments(&self) -> Result<Vec<NewsPostWithComments>>;
 }
 
 #[async_trait]
@@ -203,89 +201,72 @@ impl NewsPostsRepository for PostgresRepo {
         Ok(())
     }
 
-    async fn get_posts_with_comments(&self) -> Result<Vec<PostCommentWithComment>> {
-        let result = sqlx::query_as::<_, PostCommentWithComment>(
-            "
+    async fn get_all_posts_with_comments(&self) -> Result<Vec<NewsPostWithComments>> {
+        let rows = sqlx::query_as::<_, PostWithCommentRow>(
+            r#"
         SELECT 
-            np.id AS post_id,
-            np.title,
-            np.url,
-            np.description,
-            np.created_at AS post_created_at,
-            u.name AS author_name,
-            pc.id AS comment_id,
-            pc.content AS comment_content,
-            pc.created_at AS comment_created_at,
-            cu.name AS commenter_name
-        FROM news_posts np
-        JOIN users u ON np.author_id = u.id
-        JOIN post_comments pc ON pc.news_post_id = np.id
-        JOIN users cu ON pc.author_id = cu.id
-        ORDER BY np.created_at DESC, pc.created_at ASC
-        ",
+          p.id AS post_id,
+          p.url,
+          p.title,
+          p.description,
+          p.author_id,
+          u.name AS post_author_name,
+          p.created_at AS post_created_at,
+
+          c.id AS comment_id,
+          c.content AS comment_content,
+          cu.name AS comment_author_name,
+          c.created_at AS comment_created_at,
+          c.author_id AS comment_author_id
+        FROM news_posts p
+        JOIN users u ON p.author_id = u.id
+        LEFT JOIN post_comments c ON c.news_post_id = p.id
+        LEFT JOIN users cu ON c.author_id = cu.id
+        ORDER BY p.created_at DESC, c.created_at ASC
+        "#,
         )
         .fetch_all(self.pool())
         .await?;
 
-        Ok(result)
-    }
+        let mut posts_map = HashMap::<String, NewsPostWithComments>::new();
 
-    async fn get_all_posts_with_comments(&self) -> Result<Vec<PostCommentWithComment>> {
-        let result = sqlx::query_as::<_, PostCommentWithComment>(
-            "
-        SELECT 
-            np.id AS post_id,
-            np.title,
-            np.url,
-            np.description,
-            np.created_at AS post_created_at,
-            u.name AS author_name,
-            pc.id AS comment_id,
-            pc.content AS comment_content,
-            pc.created_at AS comment_created_at,
-            cu.name AS commenter_name
-        FROM news_posts np
-        JOIN users u ON np.author_id = u.id
-        LEFT JOIN post_comments pc ON pc.news_post_id = np.id
-        LEFT JOIN users cu ON pc.author_id = cu.id
-        ORDER BY np.created_at DESC, pc.created_at ASC
-        ",
-        )
-        .fetch_all(self.pool())
-        .await?;
+        for row in rows {
+            let post = posts_map
+                .entry(row.post_id.to_string().clone())
+                .or_insert_with(|| NewsPostWithComments {
+                    id: row.post_id,
+                    url: row.url.clone(),
+                    title: row.title.clone(),
+                    description: row.description.clone(),
+                    author_id: row.author_id,
+                    author_name: row.post_author_name.clone(),
+                    created_at: row.post_created_at,
+                    comments: vec![],
+                });
 
-        Ok(result)
-    }
+            if let (
+                Some(comment_id),
+                Some(content),
+                Some(author_name),
+                Some(created_at),
+                Some(comment_author_id),
+            ) = (
+                row.comment_id,
+                row.comment_content,
+                row.comment_author_name,
+                row.comment_created_at,
+                row.comment_author_id,
+            ) {
+                post.comments.push(PostCommentWithAuthor {
+                    id: comment_id,
+                    content,
+                    author_name,
+                    created_at,
+                    author_id: comment_author_id,
+                });
+            }
+        }
 
-    async fn get_post_with_comments_by_id(
-        &self,
-        post_id: Uuid,
-    ) -> Result<Vec<PostCommentWithComment>> {
-        let result = sqlx::query_as::<_, PostCommentWithComment>(
-            "
-        SELECT 
-            np.id AS post_id,
-            np.title,
-            np.url,
-            np.description,
-            np.created_at AS post_created_at,
-            u.name AS author_name,
-            pc.id AS comment_id,
-            pc.content AS comment_content,
-            pc.created_at AS comment_created_at,
-            cu.name AS commenter_name
-        FROM news_posts np
-        JOIN users u ON np.author_id = u.id
-        LEFT JOIN post_comments pc ON pc.news_post_id = np.id
-        LEFT JOIN users cu ON pc.author_id = cu.id
-        WHERE np.id = $1
-        ORDER BY pc.created_at ASC
-        ",
-        )
-        .bind(post_id)
-        .fetch_all(self.pool())
-        .await?;
-
-        Ok(result)
+        Ok(posts_map.into_values().collect())
     }
 }

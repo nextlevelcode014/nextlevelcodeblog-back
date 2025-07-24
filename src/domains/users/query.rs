@@ -99,8 +99,7 @@ pub struct NameUpdateDto {
     pub password: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Debug, Deserialize)]
 pub struct DeleteUser {
-    pub user_id: String,
     pub password: String,
 }
